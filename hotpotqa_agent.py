@@ -104,7 +104,7 @@ def search_web(query: str, max_results: int):
 
 
 hotpotqa_agent = dspy.ReAct(
-    "question -> answer: string", tools=[evaluate_math, search_wikipedia, search_web]
+    "question -> answer: float", tools=[evaluate_math, search_wikipedia, search_web]
 )
 
 if __name__ == "__main__":
