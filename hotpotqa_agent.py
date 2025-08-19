@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 import httpx
 import dspy
+from dspy.datasets import HotPotQA
 
 
 # Test the endpoint with a simple math problem
@@ -104,14 +105,25 @@ def search_web(query: str, max_results: int):
 
 
 hotpotqa_agent = dspy.ReAct(
-    "question -> answer: float", tools=[evaluate_math, search_wikipedia, search_web]
+    "question -> answer",
+    tools=[evaluate_math, search_wikipedia, search_web],
+    max_iters=5,
 )
 
 if __name__ == "__main__":
     load_dotenv(".env")
 
-    # Configure DSPY to use our Ollama endpoint
-    dspy.configure(lm=dspy.LM("gemini/gemini-2.5-flash-preview-05-20"), cache=False)
+    # Configure
+    # lm = dspy.LM(
+    #     "ollama_chat/llama3.2:1b", api_base="http://localhost:11434", api_key=""
+    # )
+    # lm = dspy.LM(
+    #     "openai/llama3.2:3b",
+    #     api_key="makora_bio_endpoint",
+    #     api_base="https://roshan-kern--ollama-endpoint-ollama-api.modal.run/v1",
+    # )
+    lm = dspy.LM("gemini/gemini-2.5-flash-preview-05-20")
+    dspy.configure(lm=lm, temperature=0.7, cache=False)
 
     # More challenging HotpotQA question requiring multi-hop reasoning
     pred = hotpotqa_agent(
