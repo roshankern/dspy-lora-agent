@@ -113,12 +113,9 @@ hotpotqa_agent = dspy.ReAct(
 if __name__ == "__main__":
     load_dotenv(".env")
 
-    # Configure
+    # Configure DSPY with a language model
     # lm = dspy.LM(
-    #     "ollama_chat/llama3.2:1b", api_base="http://localhost:11434", api_key=""
-    # )
-    # lm = dspy.LM(
-    #     "openai/llama3.2:3b",
+    #     "openai/llama3.2:3b", # anything smaller than 3.2:3b is too dumb for DSPY parsing
     #     api_key="makora_bio_endpoint",
     #     api_base="https://roshan-kern--ollama-endpoint-ollama-api.modal.run/v1",
     # )
