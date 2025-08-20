@@ -119,7 +119,12 @@ if __name__ == "__main__":
     #     api_key="makora_bio_endpoint",
     #     api_base="https://roshan-kern--ollama-endpoint-ollama-api.modal.run/v1",
     # )
-    lm = dspy.LM("gemini/gemini-2.5-flash-preview-05-20")
+    lm = dspy.LM(
+        "openai/unsloth/Llama-3.2-3B-Instruct",
+        api_key="",
+        api_base="https://roshan-kern--hf-endpoint-serve.modal.run/v1",
+    )
+    # lm = dspy.LM("gemini/gemini-2.5-flash-preview-05-20")
     dspy.configure(lm=lm, temperature=0.7, cache=False)
 
     # More challenging HotpotQA question requiring multi-hop reasoning
