@@ -120,7 +120,7 @@ if __name__ == "__main__":
     #     api_base="https://roshan-kern--ollama-endpoint-ollama-api.modal.run/v1",
     # )
     lm = dspy.LM(
-        "openai/unsloth/Llama-3.2-3B-Instruct",
+        "openai/rshn-krn/hotpotqa-agent-sft-llm",
         api_key="",
         api_base="https://roshan-kern--hf-endpoint-serve.modal.run/v1",
     )

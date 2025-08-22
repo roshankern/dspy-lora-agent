@@ -59,7 +59,7 @@ vllm_image = (
 # A single B200 GPUs has enough VRAM to store a 70,000,000,000 parameter model,
 # like Llama 3.3, in eight bit precision, along with a very large KV cache.
 
-MODEL_NAME = "unsloth/Llama-3.2-3B-Instruct"
+MODEL_NAME = "rshn-krn/hotpotqa-agent-sft-llm"
 
 # Although vLLM will download weights from Hugging Face on-demand,
 # we want to cache them so we don't do it every time our server starts.
