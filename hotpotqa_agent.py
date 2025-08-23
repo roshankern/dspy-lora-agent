@@ -120,13 +120,13 @@ if __name__ == "__main__":
         api_base="https://roshan-kern--hf-endpoint-serve-original-model.modal.run/v1",
         cache=False,
     )
-    # lm = dspy.LM(
-    #     "openai/rshn-krn/hotpotqa-agent-sft-llm",
-    #     api_key="",
-    #     api_base="https://roshan-kern--hf-endpoint-serve-sft-model.modal.run/v1",
-    #     cache=False,
-    # )
-    # lm = dspy.LM("gemini/gemini-2.5-flash-preview-05-20", cache=False)
+    lm = dspy.LM(
+        "openai/rshn-krn/hotpotqa-agent-sft-llm",
+        api_key="",
+        api_base="https://roshan-kern--hf-endpoint-serve-sft-model.modal.run/v1",
+        cache=False,
+    )
+    lm = dspy.LM("gemini/gemini-2.5-flash-preview-05-20", cache=False)
     dspy.configure(lm=lm, temperature=0.7)
 
     # More challenging HotpotQA question requiring multi-hop reasoning

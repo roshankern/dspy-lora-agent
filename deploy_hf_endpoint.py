@@ -171,7 +171,7 @@ def serve_original_model():
 @modal.concurrent(  # how many requests can one replica handle? tune carefully!
     max_inputs=32
 )
-@modal.web_server(port=VLLM_PORT, startup_timeout=10 * MINUTES)
+@modal.web_server(port=VLLM_PORT + 1, startup_timeout=10 * MINUTES)
 def serve_sft_model():
     import subprocess
 
