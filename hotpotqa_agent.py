@@ -1,7 +1,8 @@
 import os
 
 from dotenv import load_dotenv
-import httpx
+
+from tavily import TavilyClient
 import dspy
 from dspy.datasets import HotPotQA
 
@@ -72,41 +73,34 @@ def search_web(query: str, max_results: int):
             - 'url' (str): The URL of the search result (truncated to 50 characters).
     """
     api_key = os.environ.get("TAVILY_API_KEY")
+    tavily_client = TavilyClient(api_key=api_key)
+    response = tavily_client.search(
+        query,
+        max_results=max_results,
+        search_depth="basic",
+        include_answer=False,
+        include_raw_content=False,
+        include_images=False,
+    )
 
-    url = "https://api.tavily.com/search"
-    headers = {"Content-Type": "application/json"}
-    payload = {
-        "api_key": api_key,
-        "query": query,
-        "search_depth": "basic",
-        "max_results": max_results,
-        "include_answer": False,
-        "include_raw_content": False,
-        "include_images": False,
-    }
+    results = []
+    for result in response.get("results", [])[:max_results]:
+        snippet = result.get("content", "")
+        title = result.get("title", "No title")
+        results.append(
+            {
+                "title": title,
+                "snippet": snippet,
+                "url": result.get("url", "")[:50],
+            }
+        )
 
-    with httpx.Client(timeout=30) as client:
-        response = client.post(url, json=payload, headers=headers)
-        response.raise_for_status()
-        data = response.json()
-
-        results = []
-        for result in data.get("results", [])[:max_results]:
-            snippet = result.get("content", "")
-            title = result.get("title", "No title")
-            results.append(
-                {
-                    "title": title,
-                    "snippet": snippet,
-                    "url": result.get("url", "")[:50],
-                }
-            )
-        return results
+    return results
 
 
 hotpotqa_agent = dspy.ReAct(
     "question -> answer",
-    tools=[evaluate_math, search_wikipedia, search_web],
+    tools=[evaluate_math, search_wikipedia],  # , search_web],
     max_iters=5,
 )
 
@@ -115,21 +109,29 @@ if __name__ == "__main__":
 
     # Configure DSPY with a language model
     # lm = dspy.LM(
-    #     "openai/llama3.2:3b", # anything smaller than 3.2:3b is too dumb for DSPY parsing
+    #     "openai/llama3.2:3b",  # anything smaller than 3.2:3b is too dumb for DSPY parsing
     #     api_key="makora_bio_endpoint",
     #     api_base="https://roshan-kern--ollama-endpoint-ollama-api.modal.run/v1",
+    #     cache=False,
     # )
     lm = dspy.LM(
-        "openai/rshn-krn/hotpotqa-agent-sft-llm",
+        "openai/unsloth/Llama-3.2-3B-Instruct",
         api_key="",
-        api_base="https://roshan-kern--hf-endpoint-serve.modal.run/v1",
+        api_base="https://roshan-kern--hf-endpoint-serve-original-model.modal.run/v1",
+        cache=False,
     )
-    # lm = dspy.LM("gemini/gemini-2.5-flash-preview-05-20")
-    dspy.configure(lm=lm, temperature=0.7, cache=False)
+    # lm = dspy.LM(
+    #     "openai/rshn-krn/hotpotqa-agent-sft-llm",
+    #     api_key="",
+    #     api_base="https://roshan-kern--hf-endpoint-serve-sft-model.modal.run/v1",
+    #     cache=False,
+    # )
+    # lm = dspy.LM("gemini/gemini-2.5-flash-preview-05-20", cache=False)
+    dspy.configure(lm=lm, temperature=0.7)
 
     # More challenging HotpotQA question requiring multi-hop reasoning
     pred = hotpotqa_agent(
-        question="How many years passed between the founding of Harvard University and the birth year of Albert Einstein?"
+        question="What was the tile of Björk's third album, released in 1997 and featuring the single All Is Full Of Love?"
     )
 
     print(f"Answer: {pred.answer}")

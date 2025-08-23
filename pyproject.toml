@@ -7,7 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "modal",
     "dspy",
-    "httpx",
+    "tavily-python",
     "python-dotenv",
     "openai==1.99.5", # pinned becaused of bug https://github.com/stanfordnlp/dspy/issues/8677
     "datasets>=2.14.6", # copied version used in dspy

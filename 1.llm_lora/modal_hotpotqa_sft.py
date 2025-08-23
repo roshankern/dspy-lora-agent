@@ -62,7 +62,20 @@ def finetune():
 
     # 2. Data
     print("Loading data...")
+    ds = load_dataset("rshn-krn/hotpotqa-agent-training-data-2", split="train")
+
     tokenizer = get_chat_template(tokenizer, chat_template="llama-3.1")
+
+    def is_valid(example):
+        try:
+            tokenizer.apply_chat_template(
+                example["conversations"], tokenize=False, add_generation_prompt=False
+            )
+            return True
+        except TypeError:
+            return False
+
+    ds = ds.filter(is_valid)
 
     def format_func(examples):
         texts = [
@@ -73,8 +86,6 @@ def finetune():
         ]
         return {"text": texts}
 
-    ds = load_dataset("rshn-krn/hotpotqa-agent-training-data-2", split="train")
-    ds = ds.filter(lambda e: e["trace_exact_match"])
     ds = ds.map(format_func, batched=True, num_proc=2)
 
     # 3. Trainer

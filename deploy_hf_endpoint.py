@@ -103,20 +103,6 @@ FAST_BOOT = True
 
 # If you're running an LLM service that usually has multiple replicas running, then set this to `False` for improved performance.
 
-# See the code below for details on the parameters that `FAST_BOOT` controls.
-
-# For more on the performance you can expect when serving your own LLMs, see
-# [our LLM engine performance benchmarks](https://modal.com/llm-almanac).
-
-# ## Build a vLLM engine and serve it
-
-# The function below spawns a vLLM instance listening at port 8000, serving requests to our model.
-# We wrap it in the [`@modal.web_server` decorator](https://modal.com/docs/guide/webhooks#non-asgi-web-servers)
-# to connect it to the Internet.
-
-# The server runs in an independent process, via `subprocess.Popen`, and only starts accepting requests
-# once the model is spun up and the `serve` function returns.
-
 
 app = modal.App("hf-endpoint")
 
@@ -139,8 +125,10 @@ VLLM_PORT = 8000
     max_inputs=32
 )
 @modal.web_server(port=VLLM_PORT, startup_timeout=10 * MINUTES)
-def serve():
+def serve_original_model():
     import subprocess
+
+    MODEL_NAME = "unsloth/Llama-3.2-3B-Instruct"
 
     cmd = [
         "vllm",
@@ -170,121 +158,48 @@ def serve():
     subprocess.Popen(" ".join(cmd), shell=True)
 
 
-# ## Deploy the server
+@app.function(
+    image=vllm_image,
+    gpu=f"A100:{N_GPU}",
+    scaledown_window=5 * MINUTES,  # how long should we stay up with no requests?
+    timeout=10 * MINUTES,  # how long should we wait for container start?
+    volumes={
+        "/root/.cache/huggingface": hf_cache_vol,
+        "/root/.cache/vllm": vllm_cache_vol,
+    },
+)
+@modal.concurrent(  # how many requests can one replica handle? tune carefully!
+    max_inputs=32
+)
+@modal.web_server(port=VLLM_PORT, startup_timeout=10 * MINUTES)
+def serve_sft_model():
+    import subprocess
 
-# To deploy the API on Modal, just run
-# ```bash
-# modal deploy vllm_inference.py
-# ```
+    MODEL_NAME = "rshn-krn/hotpotqa-agent-sft-llm"
 
-# This will create a new app on Modal, build the container image for it if it hasn't been built yet,
-# and deploy the app.
-
-# ## Interact with the server
-
-# Once it is deployed, you'll see a URL appear in the command line,
-# something like `https://your-workspace-name--example-vllm-inference-serve.modal.run`.
-
-# You can find [interactive Swagger UI docs](https://swagger.io/tools/swagger-ui/)
-# at the `/docs` route of that URL, i.e. `https://your-workspace-name--example-vllm-inference-serve.modal.run/docs`.
-# These docs describe each route and indicate the expected input and output
-# and translate requests into `curl` commands.
-
-# For simple routes like `/health`, which checks whether the server is responding,
-# you can even send a request directly from the docs.
-
-# To interact with the API programmatically in Python, we recommend the `openai` library.
-
-# See the `client.py` script in the examples repository
-# [here](https://github.com/modal-labs/modal-examples/tree/main/06_gpu_and_ml/llm-serving/openai_compatible)
-# to take it for a spin:
-
-# ```bash
-# # pip install openai==1.76.0
-# python openai_compatible/client.py
-# ```
-
-
-# ## Testing the server
-
-# To make it easier to test the server setup, we also include a `local_entrypoint`
-# that does a healthcheck and then hits the server.
-
-# If you execute the command
-
-# ```bash
-# modal run vllm_inference.py
-# ```
-
-# a fresh replica of the server will be spun up on Modal while
-# the code below executes on your local machine.
-
-# Think of this like writing simple tests inside of the `if __name__ == "__main__"`
-# block of a Python script, but for cloud deployments!
-
-
-@app.local_entrypoint()
-async def test(test_timeout=10 * MINUTES, content=None, twice=True):
-    url = serve.get_web_url()
-
-    system_prompt = {
-        "role": "system",
-        "content": "You are a pirate who can't help but drop sly reminders that he went to Harvard.",
-    }
-    if content is None:
-        content = "Explain the singular value decomposition."
-
-    messages = [  # OpenAI chat format
-        system_prompt,
-        {"role": "user", "content": content},
+    cmd = [
+        "vllm",
+        "serve",
+        "--uvicorn-log-level=info",
+        MODEL_NAME,
+        # "--revision",
+        # MODEL_REVISION,
+        "--served-model-name",
+        MODEL_NAME,
+        "llm",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        str(VLLM_PORT),
     ]
 
-    async with aiohttp.ClientSession(base_url=url) as session:
-        print(f"Running health check for server at {url}")
-        async with session.get("/health", timeout=test_timeout - 1 * MINUTES) as resp:
-            up = resp.status == 200
-        assert up, f"Failed health check for server at {url}"
-        print(f"Successful health check for server at {url}")
+    # enforce-eager disables both Torch compilation and CUDA graph capture
+    # default is no-enforce-eager. see the --compilation-config flag for tighter control
+    cmd += ["--enforce-eager" if FAST_BOOT else "--no-enforce-eager"]
 
-        print(f"Sending messages to {url}:", *messages, sep="\n\t")
-        await _send_request(session, "llm", messages)
-        if twice:
-            messages[0]["content"] = "You are Jar Jar Binks."
-            print(f"Sending messages to {url}:", *messages, sep="\n\t")
-            await _send_request(session, "llm", messages)
+    # assume multiple GPUs are for splitting up large matrix multiplications
+    cmd += ["--tensor-parallel-size", str(N_GPU)]
 
+    print(cmd)
 
-async def _send_request(
-    session: aiohttp.ClientSession, model: str, messages: list
-) -> None:
-    # `stream=True` tells an OpenAI-compatible backend to stream chunks
-    payload: dict[str, Any] = {"messages": messages, "model": model, "stream": True}
-
-    headers = {"Content-Type": "application/json", "Accept": "text/event-stream"}
-
-    async with session.post(
-        "/v1/chat/completions", json=payload, headers=headers, timeout=1 * MINUTES
-    ) as resp:
-        async for raw in resp.content:
-            resp.raise_for_status()
-            # extract new content and stream it
-            line = raw.decode().strip()
-            if not line or line == "data: [DONE]":
-                continue
-            if line.startswith("data: "):  # SSE prefix
-                line = line[len("data: ") :]
-
-            chunk = json.loads(line)
-            assert (
-                chunk["object"] == "chat.completion.chunk"
-            )  # or something went horribly wrong
-            print(chunk["choices"][0]["delta"]["content"], end="")
-    print()
-
-
-# We also include a basic example of a load-testing setup using
-# `locust` in the `load_test.py` script [here](https://github.com/modal-labs/modal-examples/tree/main/06_gpu_and_ml/llm-serving/openai_compatible):
-
-# ```bash
-# modal run openai_compatible/load_test.py
-# ```
+    subprocess.Popen(" ".join(cmd), shell=True)
